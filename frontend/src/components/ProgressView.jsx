@@ -121,8 +121,8 @@ export const ProgressView = ({ habits }) => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-blue-600">{stats.last30DaysRate}%</div>
-                  <div className="text-xs text-muted-foreground">30-day rate</div>
+                  <div className="text-2xl font-bold text-blue-600">{stats.completionRate}%</div>
+                  <div className="text-xs text-muted-foreground">Completion rate</div>
                 </div>
               </div>
               
