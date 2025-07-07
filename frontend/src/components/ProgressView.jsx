@@ -40,7 +40,9 @@ export const ProgressView = ({ habits }) => {
     
     return weekDays.map(date => {
       const dateString = date.toISOString().split('T')[0];
-      const completed = habits.filter(habit => habit.completionHistory[dateString]).length;
+      const completed = habits.filter(habit => 
+        habit.completion_history && habit.completion_history[dateString]
+      ).length;
       const percentage = habits.length > 0 ? Math.round((completed / habits.length) * 100) : 0;
       
       return {
