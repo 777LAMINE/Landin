@@ -179,6 +179,235 @@ async def get_habit_with_stats(habit_id: str) -> Optional[HabitWithStats]:
         earned_badges=earned_badges
     )
 
+# API Routes
+@api_router.get("/")
+async def root():
+    return {"message": "Habit Tracker API"}
+
+# Habit CRUD operations
+@api_router.post("/habits", response_model=HabitWithStats)
+async def create_habit(habit_data: HabitCreate):
+    """Create a new habit"""
+    habit = Habit(**habit_data.dict())
+    await db.habits.insert_one(habit.dict())
+    
+    # Return habit with stats (will be empty initially)
+    return await get_habit_with_stats(habit.id)
+
+@api_router.get("/habits", response_model=List[HabitWithStats])
+async def get_all_habits():
+    """Get all habits with stats"""
+    habits = await db.habits.find({"user_id": "default"}).to_list(1000)
+    
+    habits_with_stats = []
+    for habit in habits:
+        habit_stats = await get_habit_with_stats(habit['id'])
+        if habit_stats:
+            habits_with_stats.append(habit_stats)
+    
+    return habits_with_stats
+
+@api_router.get("/habits/{habit_id}", response_model=HabitWithStats)
+async def get_habit(habit_id: str):
+    """Get a specific habit with stats"""
+    habit_stats = await get_habit_with_stats(habit_id)
+    if not habit_stats:
+        raise HTTPException(status_code=404, detail="Habit not found")
+    return habit_stats
+
+@api_router.put("/habits/{habit_id}", response_model=HabitWithStats)
+async def update_habit(habit_id: str, habit_data: HabitUpdate):
+    """Update a habit"""
+    habit = await db.habits.find_one({"id": habit_id})
+    if not habit:
+        raise HTTPException(status_code=404, detail="Habit not found")
+    
+    # Update only provided fields
+    update_data = {k: v for k, v in habit_data.dict().items() if v is not None}
+    
+    if update_data:
+        await db.habits.update_one(
+            {"id": habit_id},
+            {"$set": update_data}
+        )
+    
+    return await get_habit_with_stats(habit_id)
+
+@api_router.delete("/habits/{habit_id}")
+async def delete_habit(habit_id: str):
+    """Delete a habit and all its completions"""
+    habit = await db.habits.find_one({"id": habit_id})
+    if not habit:
+        raise HTTPException(status_code=404, detail="Habit not found")
+    
+    # Delete habit and all completions
+    await db.habits.delete_one({"id": habit_id})
+    await db.habit_completions.delete_many({"habit_id": habit_id})
+    
+    return {"message": "Habit deleted successfully"}
+
+# Habit completion operations
+@api_router.post("/habits/{habit_id}/completions")
+async def toggle_habit_completion(habit_id: str, completion_data: HabitCompletionToggle):
+    """Toggle habit completion for a specific date"""
+    habit = await db.habits.find_one({"id": habit_id})
+    if not habit:
+        raise HTTPException(status_code=404, detail="Habit not found")
+    
+    # Check if completion already exists
+    existing_completion = await db.habit_completions.find_one({
+        "habit_id": habit_id,
+        "date": completion_data.date
+    })
+    
+    if existing_completion:
+        # Update existing completion
+        await db.habit_completions.update_one(
+            {"habit_id": habit_id, "date": completion_data.date},
+            {"$set": {"completed": completion_data.completed}}
+        )
+    else:
+        # Create new completion
+        completion = HabitCompletion(
+            habit_id=habit_id,
+            date=completion_data.date,
+            completed=completion_data.completed
+        )
+        await db.habit_completions.insert_one(completion.dict())
+    
+    return {"message": "Completion updated successfully"}
+
+@api_router.get("/habits/{habit_id}/completions")
+async def get_habit_completions(habit_id: str):
+    """Get completion history for a habit"""
+    habit = await db.habits.find_one({"id": habit_id})
+    if not habit:
+        raise HTTPException(status_code=404, detail="Habit not found")
+    
+    completions = await db.habit_completions.find({"habit_id": habit_id}).to_list(1000)
+    return {
+        "habit_id": habit_id,
+        "completions": [
+            {
+                "date": completion['date'].isoformat() if isinstance(completion['date'], datetime) else str(completion['date']),
+                "completed": completion['completed']
+            }
+            for completion in completions
+        ]
+    }
+
+# Statistics and analytics
+@api_router.get("/habits/stats", response_model=HabitStats)
+async def get_habit_stats():
+    """Get overall habit statistics"""
+    habits = await db.habits.find({"user_id": "default"}).to_list(1000)
+    
+    if not habits:
+        return HabitStats(
+            total_habits=0,
+            active_streaks=0,
+            today_completed=0,
+            today_total=0,
+            today_percentage=0,
+            weekly_progress=[],
+            monthly_progress=[]
+        )
+    
+    # Calculate today's stats
+    today = date.today()
+    today_completions = await db.habit_completions.find({
+        "date": today,
+        "completed": True
+    }).to_list(1000)
+    
+    today_completed = len(today_completions)
+    today_total = len(habits)
+    today_percentage = int((today_completed / today_total * 100)) if today_total > 0 else 0
+    
+    # Calculate active streaks
+    active_streaks = 0
+    for habit in habits:
+        completion_history = await get_habit_completion_history(habit['id'])
+        current_streak, _ = calculate_streaks(completion_history)
+        if current_streak > 0:
+            active_streaks += 1
+    
+    # Calculate weekly progress (last 7 days)
+    weekly_progress = []
+    for i in range(7):
+        check_date = date.today()
+        check_date = check_date.replace(day=check_date.day - i)
+        
+        day_completions = await db.habit_completions.find({
+            "date": check_date,
+            "completed": True
+        }).to_list(1000)
+        
+        completed = len(day_completions)
+        percentage = int((completed / today_total * 100)) if today_total > 0 else 0
+        
+        weekly_progress.append({
+            "date": check_date.isoformat(),
+            "completed": completed,
+            "total": today_total,
+            "percentage": percentage
+        })
+    
+    weekly_progress.reverse()  # Show oldest to newest
+    
+    # Calculate monthly progress (last 30 days)
+    monthly_progress = []
+    for i in range(30):
+        check_date = date.today()
+        check_date = check_date.replace(day=check_date.day - i)
+        
+        day_completions = await db.habit_completions.find({
+            "date": check_date,
+            "completed": True
+        }).to_list(1000)
+        
+        completed = len(day_completions)
+        percentage = int((completed / today_total * 100)) if today_total > 0 else 0
+        
+        monthly_progress.append({
+            "date": check_date.isoformat(),
+            "completed": completed,
+            "total": today_total,
+            "percentage": percentage
+        })
+    
+    monthly_progress.reverse()  # Show oldest to newest
+    
+    return HabitStats(
+        total_habits=today_total,
+        active_streaks=active_streaks,
+        today_completed=today_completed,
+        today_total=today_total,
+        today_percentage=today_percentage,
+        weekly_progress=weekly_progress,
+        monthly_progress=monthly_progress
+    )
+
+@api_router.get("/categories")
+async def get_categories():
+    """Get available habit categories"""
+    categories = [
+        {'id': 'health', 'name': 'Health', 'color': 'bg-green-100 text-green-800'},
+        {'id': 'productivity', 'name': 'Productivity', 'color': 'bg-blue-100 text-blue-800'},
+        {'id': 'learning', 'name': 'Learning', 'color': 'bg-purple-100 text-purple-800'},
+        {'id': 'fitness', 'name': 'Fitness', 'color': 'bg-orange-100 text-orange-800'},
+        {'id': 'mindfulness', 'name': 'Mindfulness', 'color': 'bg-indigo-100 text-indigo-800'},
+        {'id': 'social', 'name': 'Social', 'color': 'bg-pink-100 text-pink-800'},
+        {'id': 'creative', 'name': 'Creative', 'color': 'bg-yellow-100 text-yellow-800'},
+        {'id': 'personal', 'name': 'Personal', 'color': 'bg-gray-100 text-gray-800'}
+    ]
+    return {"categories": categories}
+
+@api_router.get("/badges")
+async def get_badges():
+    """Get available badges"""
+    return {"badges": BADGES}
+
 # Include the router in the main app
 app.include_router(api_router)
 
