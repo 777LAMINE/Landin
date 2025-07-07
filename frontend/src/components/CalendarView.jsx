@@ -234,7 +234,7 @@ export const CalendarView = ({ habits, onToggle }) => {
                   <div className="space-y-1">
                     {habits.map(habit => {
                       const dateString = date.toISOString().split('T')[0];
-                      const isCompleted = habit.completionHistory[dateString];
+                      const isCompleted = habit.completion_history && habit.completion_history[dateString];
                       
                       return (
                         <div
