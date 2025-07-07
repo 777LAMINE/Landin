@@ -65,7 +65,9 @@ export const ProgressView = ({ habits }) => {
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(currentYear, currentMonth, day);
       const dateString = date.toISOString().split('T')[0];
-      const completed = habits.filter(habit => habit.completionHistory[dateString]).length;
+      const completed = habits.filter(habit => 
+        habit.completion_history && habit.completion_history[dateString]
+      ).length;
       const percentage = habits.length > 0 ? Math.round((completed / habits.length) * 100) : 0;
       
       monthData.push({
