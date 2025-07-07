@@ -50,7 +50,9 @@ export const CalendarView = ({ habits, onToggle }) => {
 
   const getDayCompletionData = (date) => {
     const dateString = date.toISOString().split('T')[0];
-    const completedHabits = habits.filter(habit => habit.completionHistory[dateString]);
+    const completedHabits = habits.filter(habit => 
+      habit.completion_history && habit.completion_history[dateString]
+    );
     const completionPercentage = habits.length > 0 ? Math.round((completedHabits.length / habits.length) * 100) : 0;
     
     return {
