@@ -12,31 +12,17 @@ export const ProgressView = ({ habits }) => {
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
 
   const getHabitStats = (habit) => {
-    const completionHistory = Object.entries(habit.completionHistory);
-    const totalDays = completionHistory.length;
-    const completedDays = completionHistory.filter(([, completed]) => completed).length;
+    const completionHistory = habit.completion_history || {};
+    const totalDays = Object.keys(completionHistory).length;
+    const completedDays = Object.values(completionHistory).filter(Boolean).length;
     const completionRate = totalDays > 0 ? Math.round((completedDays / totalDays) * 100) : 0;
-    
-    // Get last 30 days
-    const today = new Date();
-    const last30Days = [];
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateString = date.toISOString().split('T')[0];
-      last30Days.push(habit.completionHistory[dateString] || false);
-    }
-    
-    const last30DaysCompleted = last30Days.filter(Boolean).length;
-    const last30DaysRate = Math.round((last30DaysCompleted / 30) * 100);
     
     return {
       totalDays,
       completedDays,
-      completionRate,
-      last30DaysRate,
-      currentStreak: habit.currentStreak,
-      bestStreak: habit.bestStreak
+      completionRate: habit.completion_rate || completionRate,
+      currentStreak: habit.current_streak || 0,
+      bestStreak: habit.best_streak || 0
     };
   };
 
