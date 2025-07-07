@@ -6,7 +6,6 @@ import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Card, CardContent } from './ui/card';
-import { categories } from '../mock/data';
 
 const habitIcons = ['💧', '📚', '🏃‍♂️', '🧘‍♀️', '📓', '🍎', '💪', '🌅', '🎯', '🎨', '🎵', '🌱'];
 const colorOptions = [
@@ -20,7 +19,7 @@ const colorOptions = [
   { name: 'Gray', value: 'bg-gray-50 border-gray-200' }
 ];
 
-export const HabitForm = ({ habit, onSave, onCancel }) => {
+export const HabitForm = ({ habit, categories, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
     name: habit?.name || '',
     description: habit?.description || '',
