@@ -86,10 +86,10 @@ export const ProgressView = ({ habits }) => {
   
   const overallStats = {
     totalHabits: habits.length,
-    activeStreaks: habits.filter(habit => habit.currentStreak > 0).length,
-    totalBadges: habits.reduce((acc, habit) => acc + habit.earnedBadges.length, 0),
+    activeStreaks: habits.filter(habit => (habit.current_streak || 0) > 0).length,
+    totalBadges: habits.reduce((acc, habit) => acc + (habit.earned_badges?.length || 0), 0),
     averageCompletion: habits.length > 0 
-      ? Math.round(habits.reduce((acc, habit) => acc + getHabitStats(habit).last30DaysRate, 0) / habits.length)
+      ? Math.round(habits.reduce((acc, habit) => acc + (habit.completion_rate || 0), 0) / habits.length)
       : 0
   };
 
